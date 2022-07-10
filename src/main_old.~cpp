@@ -1,0 +1,99 @@
+#include <Arduino.h>
+#include <SoftwareSerial.h>
+
+String bt_name = "TrackerRoot";
+String bt_pin = "1234";
+const int hc05_at_pin = 4;
+const int hc05_rx_pin = 3;
+const int hc05_tx_pin = 2;
+
+
+SoftwareSerial BTSerial(hc05_tx_pin, hc05_rx_pin); // RX, TX
+
+String hc05_in_buff;
+
+uint8_t startup_checks = 0;
+unsigned long startup_time = 0;
+const uint8_t bt_ok = 0b00000001;
+
+#define VERBOSE
+
+void setup() {
+  startup_time = millis();
+  pinMode(hc05_at_pin, OUTPUT);
+  digitalWrite(hc05_at_pin, HIGH);
+  BTSerial.begin(38400);
+  BTSerial.print("AT\r\n");
+  BTSerial.print("AT+INIT\r\n"); //todo, move to mini event loop
+
+  #ifdef VERBOSE
+  Serial.begin(9600);
+  #endif
+}
+
+#ifdef VERBOSE
+#define dbg_print(x) Serial.print(x)
+#define dbg_println(x) Serial.println(x)
+#else
+#define dbg_print(x) //x
+#define dbg_println(x) //x\n
+#endif
+
+void loop() {
+  // STARTUP_STATE. Put this into a state machine.
+  // if it fails, exit into FAIL_STATE, repeatedly showing error.
+  // if it succeeds, continue into MAIN_STATE, and do whatever there.
+
+  if (BTSerial.available())
+  {
+    char c = BTSerial.read();
+    hc05_in_buff.concat(c);
+
+    if(c=='\n'){ // bt info fully received.
+      dbg_print("BT Received: ");
+      dbg_println(hc05_in_buff);
+      if (hc05_in_buff.equals("OK\r\n")){
+        startup_checks |= bt_ok;
+      }
+      hc05_in_buff = "";
+    }
+  }
+
+  if (millis() - startup_time > 1000){ // 5 second elapsed since startup
+    if ((startup_checks&bt_ok)==0){
+            dbg_println("BT HC-05 Failed To Start.");
+    }else{
+      /*BTSerial.print("AT+NAME=");
+      BTSerial.print(bt_name);
+      BTSerial.print("\r\n");
+      // wait for OK
+      BTSerial.print("AT+ROLE=0\r\n");
+      // wait for OK
+      BTSerial.print("AT+ROLE=0x0500\r\n"); // set to peripheral, nothing else
+      // wait for OK
+      //note: can use for some 3d positioning:
+      // BTSerial.print("AT+INQM=1,9,48\r\n");
+
+      //AT+RMAAD (release from prev pair)
+      BTSerial.print("AT+PSWD=");
+      BTSerial.print(bt_pin);
+      BTSerial.print("\r\n");
+
+
+      //BTSerial.print("AT+UART=115200,0,0\r\n");
+      //digitalWrite(hc05_at_pin, LOW);
+      //BTSerial.end();
+      //BTSerial.begin(115200);*/
+
+      
+
+      BTSerial.print("AT+INQ\r\n");
+
+      
+    }
+    //BTSerial.print("AT\r\n");
+    startup_time = millis();
+    //BTSerial.print("HI?\r\n");
+
+  }
+}
